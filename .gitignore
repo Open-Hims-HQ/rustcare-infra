@@ -2,3 +2,4 @@
 # Generated passwords (NEVER COMMIT)
 .passwords.generated
 .env.backup.*
+.env
