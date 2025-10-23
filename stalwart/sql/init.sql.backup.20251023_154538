@@ -1,0 +1,88 @@
+-- Stalwart Mail Server Database Schema
+-- Creates tables for user accounts, groups, and mail configuration
+
+-- Users and Groups Table
+CREATE TABLE IF NOT EXISTS accounts (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    type VARCHAR(20) NOT NULL DEFAULT 'individual', -- 'individual', 'group', 'list'
+    description TEXT,
+    quota BIGINT DEFAULT 1073741824, -- 1GB default
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Group Membership Table
+CREATE TABLE IF NOT EXISTS group_members (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    member_of VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    FOREIGN KEY (name) REFERENCES accounts(name) ON DELETE CASCADE,
+    FOREIGN KEY (member_of) REFERENCES accounts(name) ON DELETE CASCADE,
+    UNIQUE(name, member_of)
+);
+
+-- Email Aliases Table
+CREATE TABLE IF NOT EXISTS aliases (
+    id SERIAL PRIMARY KEY,
+    alias VARCHAR(255) NOT NULL,
+    destination VARCHAR(255) NOT NULL,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Domain Configuration
+CREATE TABLE IF NOT EXISTS domains (
+    id SERIAL PRIMARY KEY,
+    domain VARCHAR(255) UNIQUE NOT NULL,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_accounts_name ON accounts(name);
+CREATE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email);
+CREATE INDEX IF NOT EXISTS idx_accounts_active ON accounts(active);
+CREATE INDEX IF NOT EXISTS idx_group_members_name ON group_members(name);
+CREATE INDEX IF NOT EXISTS idx_group_members_member_of ON group_members(member_of);
+CREATE INDEX IF NOT EXISTS idx_aliases_alias ON aliases(alias);
+CREATE INDEX IF NOT EXISTS idx_aliases_destination ON aliases(destination);
+CREATE INDEX IF NOT EXISTS idx_domains_domain ON domains(domain);
+
+-- Insert default domain
+INSERT INTO domains (domain) VALUES ('rustcare.local') ON CONFLICT (domain) DO NOTHING;
+
+-- Insert default admin user (password: admin123)
+-- Password hash for 'admin123' using bcrypt
+INSERT INTO accounts (name, email, password, type, description) 
+VALUES (
+    'admin@rustcare.local',
+    'admin@rustcare.local', 
+    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj.qMxqAWcpe',
+    'individual',
+    'System Administrator'
+) ON CONFLICT (name) DO NOTHING;
+
+-- Insert system user for internal operations
+INSERT INTO accounts (name, email, password, type, description) 
+VALUES (
+    'system@rustcare.local',
+    'system@rustcare.local',
+    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj.qMxqAWcpe',
+    'individual',
+    'System User for Internal Operations'
+) ON CONFLICT (name) DO NOTHING;
+
+-- Insert noreply user for automated emails
+INSERT INTO accounts (name, email, password, type, description) 
+VALUES (
+    'noreply@rustcare.local',
+    'noreply@rustcare.local',
+    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj.qMxqAWcpe',
+    'individual',
+    'No Reply Address for Automated Emails'
+) ON CONFLICT (name) DO NOTHING;

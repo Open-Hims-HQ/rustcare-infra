@@ -1,0 +1,186 @@
+# Stalwart Mail Server Configuration for RustCare
+# Production-ready email server with PostgreSQL backend
+
+# Server Configuration
+[server]
+hostname = "mail.rustcare.local"
+greeting = "RustCare Mail Server"
+
+[server.listener.smtp]
+bind = ["0.0.0.0:25"]
+protocol = "smtp"
+
+[server.listener.submissions]
+bind = ["0.0.0.0:587"]
+protocol = "smtp"
+tls.implicit = false
+
+[server.listener.submission]
+bind = ["0.0.0.0:465"]
+protocol = "smtp"
+tls.implicit = true
+
+[server.listener.imap]
+bind = ["0.0.0.0:993"]
+protocol = "imap"
+tls.implicit = true
+
+[server.listener.pop3]
+bind = ["0.0.0.0:995"]
+protocol = "pop3"
+tls.implicit = true
+
+[server.listener.sieve]
+bind = ["0.0.0.0:4190"]
+protocol = "managesieve"
+tls.implicit = true
+
+[server.listener.http]
+bind = ["0.0.0.0:8080"]
+protocol = "http"
+
+# TLS Configuration
+[certificate.default]
+cert = "/opt/stalwart-mail/certs/cert.pem"
+private-key = "/opt/stalwart-mail/certs/key.pem"
+
+# Database Configuration (PostgreSQL)
+[store.postgresql]
+type = "postgresql"
+host = "postgres"
+port = 5432
+database = "stalwart"
+user = "stalwart"
+password = "stalwart_password"
+max-connections = 10
+min-connections = 5
+
+# Authentication
+[authentication]
+fallback-admin = ["admin@rustcare.local"]
+
+[authentication.sql]
+type = "sql"
+store = "postgresql"
+query = "SELECT password FROM accounts WHERE name = ? AND active = true"
+
+# Directory Configuration
+[directory.sql]
+type = "sql"
+store = "postgresql"
+
+[directory.sql.query]
+name = "SELECT name, type, secret, description, quota FROM accounts WHERE name = ? AND active = true"
+members = "SELECT member_of FROM group_members WHERE name = ?"
+recipients = "SELECT name FROM accounts WHERE name = ? AND type != 'group' AND active = true UNION SELECT p.name FROM accounts p JOIN group_members g ON p.name = g.member_of WHERE g.name = ? AND p.active = true"
+emails = "SELECT name FROM accounts WHERE email = ? AND active = true"
+verify = "SELECT address FROM accounts WHERE address = ? AND type = 'individual' AND active = true"
+expand = "SELECT p.name FROM accounts p JOIN group_members g ON p.name = g.member_of WHERE g.name = ? AND p.active = true"
+domains = "SELECT 1 FROM accounts WHERE name = ? AND active = true"
+
+# Storage Configuration
+[storage]
+data = "postgresql"
+fts = "postgresql"
+lookup = "postgresql"
+blob = "postgresql"
+
+# SMTP Configuration
+[session.smtp]
+hostname = "mail.rustcare.local"
+max-message-size = 52428800  # 50 MB
+
+[session.smtp.auth]
+mechanisms = ["plain", "login"]
+require = true
+directory = "sql"
+
+# Relay Configuration
+[session.smtp.relay]
+host = "localhost"
+port = 587
+auth.username = "system@rustcare.local"
+auth.secret = "system_password"
+
+# Security
+[session.smtp.rcpt]
+relay = true
+directory = "sql"
+
+# Mail Queue
+[queue]
+path = "/opt/stalwart-mail/queue"
+hash = 64
+
+[queue.outbound]
+next-hop = [{if = "rcpt-domain in ['rustcare.local']", then = "'local'"},
+           {else = "'remote'"}]
+
+# Milter (optional)
+[session.smtp.milter]
+enable = false
+
+# Virus Scanning (optional)
+[session.smtp.antivirus]
+enable = false
+
+# Spam Filter (optional)
+[session.smtp.antispam]
+enable = false
+
+# Logging
+[tracer.console]
+type = "console"
+level = "info"
+
+[tracer.journal]
+type = "journal"
+level = "debug"
+
+# Metrics
+[metrics]
+prometheus = "0.0.0.0:9091"
+
+# Web Admin
+[management]
+bind = ["0.0.0.0:8080"]
+protocol = "http"
+
+[management.api]
+enable = true
+bind = ["0.0.0.0:8080"]
+
+# DKIM Configuration
+[signature.dkim]
+enable = true
+strict = false
+
+[signature.dkim.rsa]
+key = "/opt/stalwart-mail/certs/dkim.key"
+selector = "default"
+headers = ["From", "Reply-To", "Subject", "Date"]
+algorithm = "rsa-sha256"
+canonicalization = "relaxed/relaxed"
+
+# ARC Configuration
+[signature.arc]
+enable = true
+key = "/opt/stalwart-mail/certs/dkim.key"
+selector = "default"
+
+# SPF Configuration
+[report.spf]
+verify = true
+
+# DMARC Configuration
+[report.dmarc]
+verify = true
+store = "postgresql"
+
+# MTA-STS Configuration
+[report.mta-sts]
+enable = false
+
+# TLS Reporting
+[report.tls]
+enable = false

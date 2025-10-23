@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../rustcare-engine"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "../rustcare-ui"
+		}
+	],
+	"settings": {}
+}
