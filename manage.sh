@@ -291,6 +291,17 @@ db_operations() {
                 docker volume rm rustcare-infra_postgres_data || true
                 docker-compose up -d postgres
                 echo -e "${GREEN}✅ PostgreSQL reset${NC}"
+                
+                # Wait for PostgreSQL to be ready
+                echo -e "${BLUE}⏳ Waiting for PostgreSQL to initialize...${NC}"
+                sleep 5
+                
+                # Generate new .env file for rustcare-engine with updated passwords
+                if [[ -f "$SCRIPT_DIR/scripts/generate-engine-env.sh" ]]; then
+                    echo -e "${BLUE}🔧 Regenerating RustCare Engine configuration...${NC}"
+                    "$SCRIPT_DIR/scripts/generate-engine-env.sh"
+                    echo -e "${GREEN}✅ Engine .env updated with new database password${NC}"
+                fi
             fi
             ;;
         connect)

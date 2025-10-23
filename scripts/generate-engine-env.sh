@@ -36,6 +36,30 @@ fi
 echo -e "${BLUE}📋 Loading infrastructure configuration...${NC}"
 source "$INFRA_ENV"
 
+# Get actual passwords from running Docker containers
+echo -e "${BLUE}🔍 Detecting actual passwords from infrastructure...${NC}"
+
+# Get PostgreSQL password from Docker (actual generated password)
+if docker ps | grep -q rustcare-postgres; then
+    DOCKER_POSTGRES_PASSWORD=$(docker exec rustcare-postgres env | grep POSTGRES_PASSWORD | cut -d'=' -f2 || echo "")
+    if [[ -n "$DOCKER_POSTGRES_PASSWORD" ]] && [[ "$DOCKER_POSTGRES_PASSWORD" != "postgres" ]]; then
+        POSTGRES_PASSWORD="$DOCKER_POSTGRES_PASSWORD"
+        echo -e "${GREEN}✅ Detected PostgreSQL password from Docker${NC}"
+    fi
+fi
+
+# Get rustcare user password from Docker logs (init script generated it)
+if docker logs rustcare-postgres 2>&1 | grep -q "RUSTCARE_PASSWORD="; then
+    RUSTCARE_PASSWORD=$(docker logs rustcare-postgres 2>&1 | grep "RUSTCARE_PASSWORD=" | tail -1 | cut -d'=' -f2)
+    if [[ -n "$RUSTCARE_PASSWORD" ]]; then
+        echo -e "${GREEN}✅ Detected rustcare user password from Docker logs${NC}"
+    fi
+fi
+
+# Detect PostgreSQL port from docker-compose
+PG_PORT=$(docker port rustcare-postgres 5432 2>/dev/null | cut -d':' -f2 || echo "5432")
+echo -e "${GREEN}✅ PostgreSQL is running on port ${PG_PORT}${NC}"
+
 # Generate secure passwords and keys
 echo -e "${BLUE}🔐 Generating secure credentials...${NC}"
 
@@ -118,7 +142,7 @@ cat > "$ENGINE_ENV" << EOF
 # =============================================================================
 # DATABASE CONFIGURATION
 # =============================================================================
-DATABASE_URL=postgresql://${POSTGRES_USER:-rustcare}:${POSTGRES_PASSWORD:-postgres}@localhost:5432/${POSTGRES_DB:-rustcare_dev}
+DATABASE_URL=postgresql://${POSTGRES_USER:-rustcare}:${RUSTCARE_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}@localhost:${PG_PORT:-5433}/${POSTGRES_DB:-rustcare_dev}
 DATABASE_MAX_CONNECTIONS=20
 DATABASE_MIN_CONNECTIONS=5
 DATABASE_ACQUIRE_TIMEOUT=30
