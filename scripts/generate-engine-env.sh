@@ -63,11 +63,9 @@ echo -e "${GREEN}✅ PostgreSQL is running on port ${PG_PORT}${NC}"
 # Generate secure passwords and keys
 echo -e "${BLUE}🔐 Generating secure credentials...${NC}"
 
-# Generate master encryption key if not exists
-if [[ -z "$MASTER_ENCRYPTION_KEY" ]]; then
-    MASTER_ENCRYPTION_KEY=$(openssl rand -base64 32)
-    echo -e "${GREEN}✅ Generated master encryption key${NC}"
-fi
+# Generate master encryption key (always regenerate for security)
+MASTER_ENCRYPTION_KEY=$(openssl rand -base64 32)
+echo -e "${GREEN}✅ Generated master encryption key${NC}"
 
 # Generate database password if not set or default
 if [[ -z "$POSTGRES_PASSWORD" ]] || [[ "$POSTGRES_PASSWORD" == "postgres" ]] || [[ "$POSTGRES_PASSWORD" == "change_me" ]]; then
