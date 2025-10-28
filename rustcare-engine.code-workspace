@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../rustcare-ui"
+		},
+		{
+			"path": "../open-hims-profile"
 		}
 	],
 	"settings": {}
