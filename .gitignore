@@ -3,3 +3,4 @@
 .passwords.generated
 .env.backup.*
 .env
+*.pem
