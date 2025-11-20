@@ -3,231 +3,142 @@ version: '3.8'
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: rustcare-postgres
-    restart: unless-stopped
     environment:
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rustcare_dev_password}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
-    ports:
-      - "5433:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-rustcare}
+      POSTGRES_USER: ${POSTGRES_USER:-rustcare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d:ro
-    networks:
-      - rustcare-network
+      - ../rustcare-engine/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rustcare}"]
       interval: 10s
       timeout: 5s
       retries: 5
-    command: >
-      postgres
-      -c shared_preload_libraries=pg_stat_statements
-      -c pg_stat_statements.track=all
-      -c max_connections=200
-      -c shared_buffers=256MB
-      -c effective_cache_size=1GB
-      -c maintenance_work_mem=64MB
-      -c checkpoint_completion_target=0.9
-      -c wal_buffers=16MB
-      -c default_statistics_target=100
-      -c random_page_cost=1.1
-      -c effective_io_concurrency=200
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - rustcare-network
 
-  # Redis Cache & Session Store
+  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: rustcare-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
+    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
-      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
-    networks:
-      - rustcare-network
-    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # MinIO Object Storage
-  minio:
-    image: minio/minio:latest
-    container_name: rustcare-minio
+      start_period: 5s
     restart: unless-stopped
+    networks:
+      - rustcare-network
+
+  # RustCare Backend Server
+  rustcare-server:
+    build:
+      context: ../rustcare-engine
+      dockerfile: Dockerfile
+      args:
+        # Pass DATABASE_URL from environment if available (from manage.sh or .env)
+        # Falls back to constructing from POSTGRES_* variables
+        # During build, use host.docker.internal to connect to postgres on host
+        DATABASE_URL: ${DATABASE_URL}
+    container_name: rustcare-server
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-rustcare}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-rustcare_minio_password}
-      MINIO_DOMAIN: ${MINIO_DOMAIN:-localhost}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-rustcare}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-rustcare}
+      REDIS_URL: redis://redis:6379
+      RUST_LOG: ${RUST_LOG:-info}
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8080
+      JWT_SECRET: ${JWT_SECRET:-changeme-in-production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-changeme-in-production}
     ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-    networks:
-      - rustcare-network
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-
-  # NATS Messaging
-  nats:
-    image: nats:2.10-alpine
-    container_name: rustcare-nats
-    restart: unless-stopped
-    ports:
-      - "4222:4222"
-      - "8222:8222"
-    volumes:
-      - ./nats.conf:/etc/nats/nats-server.conf:ro
-    networks:
-      - rustcare-network
-    command: ["--config", "/etc/nats/nats-server.conf"]
-    healthcheck:
-      test: ["CMD", "nats", "server", "check", "--server", "nats://localhost:4222"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Jaeger Tracing
-  jaeger:
-    image: jaegertracing/all-in-one:1.51
-    container_name: rustcare-jaeger
-    restart: unless-stopped
-    environment:
-      COLLECTOR_OTLP_ENABLED: true
-    ports:
-      - "16686:16686"  # Jaeger UI
-      - "14268:14268"  # Jaeger HTTP
-      - "14250:14250"  # Jaeger gRPC
-      - "4317:4317"    # OTLP gRPC
-      - "4318:4318"    # OTLP HTTP
-    networks:
-      - rustcare-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:16686"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Prometheus Monitoring
-  prometheus:
-    image: prom/prometheus:v2.47.2
-    container_name: rustcare-prometheus
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    networks:
-      - rustcare-network
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Grafana Dashboard
-  grafana:
-    image: grafana/grafana:10.2.0
-    container_name: rustcare-grafana
-    restart: unless-stopped
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-rustcare_grafana_password}
-      GF_USERS_ALLOW_SIGN_UP: false
-    ports:
-      - "3001:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-    networks:
-      - rustcare-network
+      - "8080:8080"
     depends_on:
-      - prometheus
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Stalwart Mail Server (Production-ready)
-  stalwart-mail:
-    image: stalwartlabs/stalwart:latest
-    container_name: rustcare-stalwart
-    restart: unless-stopped
-    environment:
-      STALWART_CONFIG: /opt/stalwart-mail/etc/config.toml
-    ports:
-      - "25:25"      # SMTP
-      - "465:465"    # SMTP over SSL
-      - "587:587"    # SMTP Submission
-      - "993:993"    # IMAP over SSL
-      - "995:995"    # POP3 over SSL
-      - "4190:4190"  # ManageSieve
-      - "8082:8080"  # Web Admin (changed from 8080 to avoid conflict)
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
-      - stalwart_data:/opt/stalwart-mail
-      - ./stalwart:/opt/stalwart-mail/etc:ro
-      - ./certs:/opt/stalwart-mail/certs:ro
-    networks:
-      - rustcare-network
-    depends_on:
-      - postgres
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "25"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Mailhog (Email Testing - for development)
-  mailhog:
-    image: mailhog/mailhog:v1.0.1
-    container_name: rustcare-mailhog
+      - ../rustcare-engine/config:/app/config:ro
+      - ../rustcare-engine/migrations:/app/migrations:ro
+      - server_logs:/app/logs
     restart: unless-stopped
-    ports:
-      - "1025:1025"  # SMTP
-      - "8025:8025"  # Web UI
     networks:
       - rustcare-network
-    profiles:
-      - dev
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
+
+  # RustCare UI (Frontend)
+  rustcare-ui:
+    build:
+      context: ../rustcare-ui
+      dockerfile: Dockerfile
+    container_name: rustcare-ui
+    environment:
+      NODE_ENV: production
+      API_BASE_URL: ${API_BASE_URL:-http://rustcare-server:8080/api/v1}
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      rustcare-server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - rustcare-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Caddy Reverse Proxy (Optional)
+  caddy:
+    image: caddy:2-alpine
+    container_name: rustcare-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../rustcare-engine/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      rustcare-server:
+        condition: service_healthy
+      rustcare-ui:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - rustcare-network
 
 volumes:
   postgres_data:
     driver: local
   redis_data:
     driver: local
-  minio_data:
+  server_logs:
     driver: local
-  prometheus_data:
+  caddy_data:
     driver: local
-  grafana_data:
-    driver: local
-  stalwart_data:
+  caddy_config:
     driver: local
 
 networks:

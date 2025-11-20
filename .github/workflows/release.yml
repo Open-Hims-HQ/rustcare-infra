@@ -1,0 +1,38 @@
+name: Release Infrastructure
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  create-installer-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Create installer archive
+        run: |
+          tar -czf rustcare-installer.tar.gz \
+            install.sh \
+            uninstall.sh \
+            docker-compose.yml \
+            README.md \
+            INSTALL.md \
+            Makefile
+      
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustcare-installer
+          path: rustcare-installer.tar.gz
+      
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: rustcare-installer.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

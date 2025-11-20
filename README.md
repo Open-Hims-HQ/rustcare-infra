@@ -1,226 +1,208 @@
 # RustCare Infrastructure
 
-Complete Docker Compose setup for RustCare external services including PostgreSQL, Redis, MinIO, monitoring, and more.
+Infrastructure configuration and deployment files for RustCare Healthcare Platform.
 
-## Quick Start
+## Quick Installation
 
-1. **Clone and setup:**
+### One-Command Install (Recommended)
+
+**For Docker (Recommended):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/Open-Hims-HQ/rustcare-infra/main/install.sh | sudo INSTALL_MODE=docker bash
+```
+
+**For Binary Installation:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/Open-Hims-HQ/rustcare-infra/main/install.sh | sudo INSTALL_MODE=binary bash
+```
+
+**Auto-detect (Docker if available, otherwise binary):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/Open-Hims-HQ/rustcare-infra/main/install.sh | sudo bash
+```
+
+The installer will:
+- ✅ Detect your environment automatically
+- ✅ Install all dependencies
+- ✅ Set up as a systemd daemon service
+- ✅ Configure and start all services
+- ✅ Provide next steps
+
+### Manual Installation
+
+1. **Clone repositories:**
+   ```bash
+   git clone https://github.com/Open-Hims-HQ/rustcare-engine.git
+   git clone https://github.com/Open-Hims-HQ/rustcare-ui.git
+   git clone https://github.com/Open-Hims-HQ/rustcare-infra.git
+   ```
+
+2. **Run installer:**
    ```bash
    cd rustcare-infra
-   cp .env.example .env
-   # Edit .env with your preferred passwords
+   sudo ./install.sh
    ```
 
-2. **Start all services:**
-   ```bash
-   docker-compose up -d
-   ```
+## Installation Methods
 
-3. **Verify services:**
-   ```bash
-   docker-compose ps
-   ```
+### Docker Compose (Default)
 
-## Services Included
-
-### Core Services
-- **PostgreSQL 16** - Primary database with extensions
-  - Port: 5432
-  - Databases: `rustcare_dev`, `rustcare_test`
-  - User: `rustcare`
-  - Extensions: uuid-ossp, pgcrypto, pg_trgm, etc.
-
-- **Redis 7** - Cache and session store
-  - Port: 6379
-  - Optimized configuration
-  - AOF persistence enabled
-
-- **MinIO** - S3-compatible object storage
-  - API Port: 9000
-  - Console Port: 9001
-  - Credentials: rustcare/rustcare_minio_password
-
-### Messaging & Events
-- **NATS** - Message broker with JetStream
-  - Port: 4222
-  - Monitoring: 8222
-
-### Email Services
-- **Stalwart Mail** - Production-ready mail server
-  - SMTP: 25, 587 (submission), 465 (SSL)
-  - IMAP: 993 (SSL)
-  - POP3: 995 (SSL)
-  - Admin Console: 8080
-  - PostgreSQL backend with full email capabilities
-
-- **MailHog** - Email testing (development only)
-  - SMTP Port: 1025
-  - Web UI: 8025
-  - Profile: `dev` (use `--profile dev` to start)
-### Monitoring & Observability
-- **Jaeger** - Distributed tracing
-  - UI Port: 16686
-  - OTLP gRPC: 4317
-  - OTLP HTTP: 4318
-
-- **Prometheus** - Metrics collection
-  - Port: 9090
-  - Scrapes RustCare app metrics
-
-- **Grafana** - Dashboards and visualization  
-  - Port: 3001
-  - Credentials: admin/rustcare_grafana_password
-
-### Development Tools
-
-## Service URLs
-
-After starting with `docker-compose up -d`:
-
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| PostgreSQL | `postgresql://rustcare:password@localhost:5432/rustcare_dev` | rustcare/rustcare_dev_password |
-| Redis | `redis://localhost:6379` | - |
-| MinIO API | `http://localhost:9000` | rustcare/rustcare_minio_password |
-| MinIO Console | `http://localhost:9001` | rustcare/rustcare_minio_password |
-| NATS | `nats://localhost:4222` | - |
-| Stalwart Mail Admin | `http://localhost:8080` | admin@rustcare.local/admin123 |
-| Stalwart SMTP | `smtp://localhost:25` | - |
-| Stalwart SMTP (Auth) | `smtp://localhost:587` | user@rustcare.local/password |
-| Stalwart IMAP | `imap://localhost:993` | user@rustcare.local/password |
-| Jaeger UI | `http://localhost:16686` | - |
-| Prometheus | `http://localhost:9090` | - |
-| Grafana | `http://localhost:3001` | admin/rustcare_grafana_password |
-| MailHog | `http://localhost:8025` | - |
-
-## Commands
+Automatically detects Docker and installs as a systemd service:
 
 ```bash
-# Start all services (production mode)
+sudo INSTALL_MODE=docker ./install.sh
+```
+
+**Features:**
+- All services in containers (PostgreSQL, Redis, Server, UI)
+- Automatic service management
+- Easy updates and rollbacks
+- Isolated environment
+
+### Binary Installation
+
+For servers without Docker or for production deployments:
+
+```bash
+sudo INSTALL_MODE=binary ./install.sh
+```
+
+**Features:**
+- Native binary performance
+- Systemd service integration
+- Lower resource usage
+- Direct system integration
+
+## Directory Structure
+
+```
+projects/
+├── rustcare-engine/     # Backend source code
+├── rustcare-ui/         # Frontend source code
+└── rustcare-infra/      # Infrastructure configs
+    ├── docker-compose.yml
+    ├── install.sh       # Main installer
+    ├── uninstall.sh     # Uninstaller
+    └── quick-install.sh # One-command installer
+```
+
+## Services
+
+The installation includes:
+
+- **PostgreSQL** - Database (port 5432)
+- **Redis** - Cache and sessions (port 6379)
+- **RustCare Server** - Backend API (port 8080)
+- **RustCare UI** - Frontend (port 3000)
+- **Caddy** - Reverse proxy (optional, ports 80/443)
+
+## Configuration
+
+### Docker Installation
+
+Edit `.env` file:
+```bash
+cd rustcare-infra
+nano .env
+```
+
+### Binary Installation
+
+Edit configuration:
+```bash
+sudo nano /opt/rustcare/config/config.toml
+```
+
+## Service Management
+
+### Start Service
+```bash
+sudo systemctl start rustcare
+```
+
+### Stop Service
+```bash
+sudo systemctl stop rustcare
+```
+
+### Status
+```bash
+sudo systemctl status rustcare
+```
+
+### Logs
+
+**Docker:**
+```bash
+cd rustcare-infra
+docker-compose logs -f
+```
+
+**Binary:**
+```bash
+sudo journalctl -u rustcare -f
+```
+
+## Updates
+
+### Docker
+```bash
+cd rustcare-infra
+docker-compose pull
 docker-compose up -d
-
-# Start with development email (MailHog instead of Stalwart)
-docker-compose --profile dev up -d
-
-# Stop all services
-docker-compose down
-
-# Start specific services
-./manage.sh mail start    # Start Stalwart Mail
-./manage.sh mail dev      # Start MailHog for development
-./manage.sh mail admin    # Open mail admin console
-
-# View logs
-docker-compose logs -f stalwart-mail
-
-# Restart specific service
-docker-compose restart postgres
-
-# Update and restart
-docker-compose pull && docker-compose up -d
-
-# Clean volumes (CAUTION: deletes all data)
-docker-compose down -v
 ```
 
-## Health Checks
+### Binary
+```bash
+# Download new release
+wget https://github.com/Open-Hims-HQ/rustcare-engine/releases/download/vX.X.X/rustcare-server-X.X.X-linux-x86_64.tar.gz
 
-All services include health checks. Check status:
+# Extract and install
+tar -xzf rustcare-server-*.tar.gz
+cd rustcare-server-*/
+sudo ./scripts/install.sh
+```
+
+## Uninstallation
 
 ```bash
-# View health status
-docker-compose ps
-
-# Check specific service logs
-docker-compose logs postgres
-docker-compose logs redis
+cd rustcare-infra
+sudo ./uninstall.sh
 ```
-
-## Data Persistence
-
-Persistent volumes:
-- `postgres_data` - PostgreSQL data
-- `redis_data` - Redis data  
-- `minio_data` - MinIO data
-- `stalwart_data` - Stalwart mail data
-- `prometheus_data` - Prometheus metrics
-- `grafana_data` - Grafana dashboards
-
-## Production Notes
-
-1. **Security**: Change all default passwords in `.env`
-2. **Networking**: Adjust ports if needed
-3. **Resources**: Monitor resource usage with Prometheus/Grafana
-4. **Backups**: Set up regular backups for persistent volumes
-5. **SSL**: Add SSL certificates for production deployments
 
 ## Troubleshooting
 
-### PostgreSQL Issues
+### Service won't start
 ```bash
-# Check logs
-docker-compose logs postgres
-
-# Connect to database
-docker-compose exec postgres psql -U rustcare -d rustcare_dev
-
-# Reset PostgreSQL data (CAUTION)
-docker-compose down
-docker volume rm rustcare-infra_postgres_data
-docker-compose up -d postgres
+sudo systemctl status rustcare
+sudo journalctl -u rustcare -n 50
 ```
 
-### Redis Issues
+### Docker issues
 ```bash
-# Check Redis connectivity
-docker-compose exec redis redis-cli ping
-
-# View Redis info
-docker-compose exec redis redis-cli info
+docker-compose ps
+docker-compose logs
 ```
 
-### MinIO Issues
+### Port conflicts
+Check what's using the ports:
 ```bash
-# Check MinIO status
-curl http://localhost:9000/minio/health/live
-
-# Access MinIO console
-open http://localhost:9001
+sudo netstat -tulpn | grep -E ':(5432|6379|8080|3000)'
 ```
 
-### Mail Server Issues
-```bash
-# Check Stalwart Mail logs
-docker-compose logs stalwart-mail
+## Production Deployment
 
-# Test SMTP connection
-telnet localhost 25
+For production, ensure:
 
-# Check mail server status
-./manage.sh mail admin
+1. **Change default passwords** in `.env` or config
+2. **Set up SSL/TLS** with Caddy or Nginx
+3. **Configure backups** for PostgreSQL
+4. **Set up monitoring** (Prometheus/Grafana)
+5. **Enable firewall** rules
+6. **Review security** settings
 
-# Generate new certificates
-./certs/generate-certs.sh
+## Support
 
-# Use development mail server instead
-./manage.sh mail dev
-```
-
-## Integration with RustCare Engine
-
-1. **Database Setup**: Run the database setup script from rustcare-engine:
-   ```bash
-   cd ../rustcare-engine
-   ./scripts/setup-database.sh
-   ```
-
-2. **Environment Variables**: The engine will automatically detect running services on localhost
-
-3. **Development Workflow**:
-   ```bash
-   # Terminal 1: Start infrastructure
-   cd rustcare-infra && docker-compose up -d
-   
-   # Terminal 2: Run application
-   cd rustcare-engine && cargo run --bin rustcare-server
-   ```
+- Documentation: https://docs.rustcare.dev
+- Issues: https://github.com/Open-Hims-HQ/rustcare-engine/issues
+- Email: support@rustcare.dev
